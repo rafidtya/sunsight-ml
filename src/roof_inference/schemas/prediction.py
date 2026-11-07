@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class ImageMetadata(BaseModel):
     width: int
@@ -11,11 +12,13 @@ class BoundingBox(BaseModel):
     y2:float
 
 class Detection(BaseModel):
+    id: str
     class_id: int
     class_name: str
     confidence: float
     bbox: BoundingBox
     polygon: list[list[float]]
+    area_px: float
 
 class PredictionData(BaseModel):
     image: ImageMetadata
@@ -24,9 +27,12 @@ class PredictionData(BaseModel):
 
 class PredictionMeta(BaseModel):
     model: str
+    model_version: Optional[str] = None
     inference_time_ms: float
 
 class PredictionResponse(BaseModel):
     success: bool
-    data: PredictionData
-    meta: PredictionMeta
+    request_id: Optional[str] = None
+    data: Optional[PredictionData] = None
+    error: Optional[str] = None
+    meta: Optional[PredictionMeta] = None
