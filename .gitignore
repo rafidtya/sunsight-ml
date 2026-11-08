@@ -27,7 +27,11 @@ env/
 
 # Environment
 .env
-.env.local
+.env.*
+!.env.example
+
+# Scratch / sample output
+success.json
 
 # Docker
 *.log

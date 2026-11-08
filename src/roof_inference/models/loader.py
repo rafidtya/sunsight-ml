@@ -4,7 +4,7 @@ from roof_inference.core.config import settings
 
 class ModelLoader:
     def __init__(self):
-        self._model = YOLO | None = None
+        self._model: YOLO | None = None
     
     def load(self):
         # Ini kalo modelnya belum ke load

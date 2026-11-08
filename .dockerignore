@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Git
+.git/
+.github/
+
+# Environment & secrets
+.env
+.env.*
+
+# Testing & linting
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Model weights are downloaded from GitHub Releases at build time
+*.pt
+*.pth
+
+# Misc
+success.json
+
+# OS
+.DS_Store

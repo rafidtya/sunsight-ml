@@ -1,0 +1,176 @@
+name: Build & Deploy ML
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      weights_url:
+        description: "Override weights URL (opsional)"
+        required: false
+
+concurrency:
+  group: deploy-ml
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC ke AWS
+  contents: read  # baca repo & release
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Validate required config
+        run: |
+          set -euo pipefail
+          missing=0
+          for v in AWS_REGION ECR_REPOSITORY EC2_INSTANCE_ID; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Repo variable $v belum di-set"
+              missing=1
+            fi
+          done
+          if [ -z "${{ vars.AWS_ROLE_ARN }}" ]; then
+            echo "::error::Repo variable AWS_ROLE_ARN belum di-set"
+            missing=1
+          fi
+          exit $missing
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve weights URL & image tag
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Model baru: pakai asset dari release yang barusan dipublish
+            TAG="${{ github.event.release.tag_name }}"
+            URL=$(gh release view "$TAG" --json assets --jq '.assets[0].url')
+            IMG="$TAG"
+          elif [ -n "${{ github.event.inputs.weights_url }}" ]; then
+            # Manual dispatch dengan override
+            URL="${{ github.event.inputs.weights_url }}"
+            IMG="sha-${GITHUB_SHA::7}"
+          else
+            # Push kode: pakai release terbaru
+            URL=$(gh release view --json assets --jq '.assets[0].url')
+            IMG="sha-${GITHUB_SHA::7}"
+          fi
+
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "::error::Tidak ada asset weights di release"
+            exit 1
+          fi
+
+          echo "weights_url=$URL" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMG" >> "$GITHUB_OUTPUT"
+          echo "Weights : $URL"
+          echo "Image   : $IMG"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-ml-deploy
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push image
+        id: build
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          WEIGHTS_URL: ${{ steps.meta.outputs.weights_url }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build -f dockerfile \
+            --build-arg "WEIGHTS_URL=$WEIGHTS_URL" \
+            -t "$IMAGE" \
+            -t "$REGISTRY/$ECR_REPOSITORY:latest" .
+          docker push "$IMAGE"
+          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
+          echo "image_uri=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to EC2 via SSM
+        env:
+          ML_IMAGE: ${{ steps.build.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+
+          # Script dijalankan di EC2. Placeholder di-substitusi di runner.
+          SCRIPT=$(cat <<'EOS'
+          set -e
+          export ML_IMAGE="__ML_IMAGE__"
+          cd /opt/sunsight-ml
+          REGISTRY="${ML_IMAGE%%/*}"
+          aws ecr get-login-password --region "__REGION__" \
+            | docker login --username AWS --password-stdin "$REGISTRY"
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker image prune -f
+          for i in $(seq 1 40); do
+            if curl -fsS http://localhost:8000/ready >/dev/null 2>&1; then
+              echo "READY"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "HEALTHCHECK FAILED"
+          docker compose logs --tail=100
+          exit 1
+          EOS
+          )
+          SCRIPT="${SCRIPT//__ML_IMAGE__/$ML_IMAGE}"
+          SCRIPT="${SCRIPT//__REGION__/$AWS_REGION}"
+
+          jq -n --arg cmd "$SCRIPT" '{commands: [$cmd]}' > /tmp/ssm.json
+
+          CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy $ML_IMAGE" \
+            --timeout-seconds 600 \
+            --parameters file:///tmp/ssm.json \
+            --query "Command.CommandId" \
+            --output text)
+          echo "SSM command id: $CMD_ID"
+
+          if ! aws ssm wait command-executed \
+            --region "$AWS_REGION" \
+            --command-id "$CMD_ID" \
+            --instance-id "$EC2_INSTANCE_ID"; then
+            echo "::error::Deploy command gagal"
+            aws ssm get-command-invocation \
+              --region "$AWS_REGION" \
+              --command-id "$CMD_ID" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query "{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}" \
+              --output json
+            exit 1
+          fi
+
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$CMD_ID" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --query "StandardOutputContent" \
+            --output text

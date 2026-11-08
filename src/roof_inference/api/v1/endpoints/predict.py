@@ -47,7 +47,7 @@ async def predict(
             )
 
         image = process_image(content)
-        orig_height, orig_width = image.shape[:2]
+        orig_width, orig_height = image.size
 
         roi_x2 = roi_x2 or orig_width
         roi_y2 = roi_y2 or orig_height

@@ -1,5 +1,4 @@
 import uuid
-import numpy as np
 
 def calculate_polygon_area(polygon):
     """Calculate area using shoelace formula."""

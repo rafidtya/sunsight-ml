@@ -3,15 +3,15 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 
-# Ini kayaknya salah
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+# config.py -> core -> roof_inference (package root that holds weights/)
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 
 class Settings(BaseSettings):
     APP_NAME:str =  "Sunsight"
     APP_VERSION:str = "1.0.0"
     API_V1_PREFIX:str = "/api/v1"
-    #Ini kayaknya salah
-    MODEL_PATH: Path = PROJECT_ROOT / "weights" / "best.pt"
+    # Bisa di-override lewat env MODEL_PATH
+    MODEL_PATH: Path = PACKAGE_ROOT / "weights" / "best.pt"
     MODEL_DEVICE: str = "cpu"
     MODEL_CONFIDENCE: float = 0.25
     MODEL_IMAGE_SIZE: int = 640
@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     MAX_IMAGE_SIZE: int = 10 * 1024 * 1024
     MAX_IMAGE_PIXELS: int = 20_000_000
 
-    MAX_CONCCURENT_INFERENCES: int = 1
+    MAX_CONCURRENT_INFERENCES: int = 1
 
     LOG_LEVEL: str = "INFO"
 
