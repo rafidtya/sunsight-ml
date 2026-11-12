@@ -14,7 +14,14 @@ class Settings(BaseSettings):
     MODEL_PATH: Path = PACKAGE_ROOT / "weights" / "best.pt"
     MODEL_DEVICE: str = "cpu"
     MODEL_CONFIDENCE: float = 0.25
-    MODEL_IMAGE_SIZE: int = 640
+    # Model dilatih pada imgsz=1024. Pengukuran pada citra satelit ubin zoom 19
+    # di Bogor: 640 tidak menemukan satu bidang atap pun, 1024 menemukan 2-21
+    # bidang, dan 1280 menemukan 8-13 bidang dengan confidence 0,66-0,79.
+    MODEL_IMAGE_SIZE: int = 1280
+
+    # Versi bobot yang benar-benar dimuat. Diisi dari env saat deploy supaya
+    # setiap hasil deteksi dapat ditelusuri ke satu rilis bobot tertentu.
+    MODEL_VERSION: str = "latest"
 
     MAX_IMAGE_SIZE: int = 10 * 1024 * 1024
     MAX_IMAGE_PIXELS: int = 20_000_000

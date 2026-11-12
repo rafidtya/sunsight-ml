@@ -7,6 +7,7 @@ services:
       - "8000:8000"
     environment:
       MODEL_DEVICE: ${MODEL_DEVICE:-cpu}
+      MODEL_VERSION: ${MODEL_VERSION:-latest}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/ready"]
