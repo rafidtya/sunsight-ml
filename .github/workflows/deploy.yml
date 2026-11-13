@@ -116,11 +116,19 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Berkas compose di EC2 harus berasal dari repo. Tanpa langkah ini ia
+          # tertinggal pada versi saat instance pertama disiapkan, sehingga environment
+          # baru seperti MODEL_VERSION dan ML_API_KEY tidak pernah sampai ke container.
+          # `.env` di direktori yang sama sengaja tidak disentuh karena memuat rahasia.
+          COMPOSE_B64=$(base64 -w0 docker-compose.yml)
+
           # Script dijalankan di EC2. Placeholder di-substitusi di runner.
           SCRIPT=$(cat <<'EOS'
           set -e
           export ML_IMAGE="__ML_IMAGE__"
           export MODEL_VERSION="__MODEL_VERSION__"
+          mkdir -p /opt/sunsight-ml
+          printf '%s' "__COMPOSE_B64__" | base64 -d > /opt/sunsight-ml/docker-compose.yml
           cd /opt/sunsight-ml
           REGISTRY="${ML_IMAGE%%/*}"
           aws ecr get-login-password --region "__REGION__" \
@@ -142,6 +150,7 @@ jobs:
           )
           SCRIPT="${SCRIPT//__ML_IMAGE__/$ML_IMAGE}"
           SCRIPT="${SCRIPT//__MODEL_VERSION__/$MODEL_VERSION}"
+          SCRIPT="${SCRIPT//__COMPOSE_B64__/$COMPOSE_B64}"
           SCRIPT="${SCRIPT//__REGION__/$AWS_REGION}"
 
           jq -n --arg cmd "$SCRIPT" '{commands: [$cmd]}' > /tmp/ssm.json
