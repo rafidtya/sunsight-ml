@@ -85,7 +85,10 @@ async def predict(
             ),
             meta=PredictionMeta(
                 model="yolov8-seg",
-                model_version=model_version,
+                # Versi yang dilaporkan adalah bobot yang benar-benar dimuat, bukan
+                # yang diminta klien: layanan ini memuat satu berkas bobot, sehingga
+                # `model_version` pada permintaan belum dipakai untuk memilih apa pun.
+                model_version=settings.MODEL_VERSION,
                 inference_time_ms=inference_time,
             ),
         )

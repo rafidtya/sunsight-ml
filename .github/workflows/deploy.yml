@@ -112,6 +112,7 @@ jobs:
       - name: Deploy to EC2 via SSM
         env:
           ML_IMAGE: ${{ steps.build.outputs.image_uri }}
+          MODEL_VERSION: ${{ steps.meta.outputs.image_tag }}
         run: |
           set -euo pipefail
 
@@ -119,6 +120,7 @@ jobs:
           SCRIPT=$(cat <<'EOS'
           set -e
           export ML_IMAGE="__ML_IMAGE__"
+          export MODEL_VERSION="__MODEL_VERSION__"
           cd /opt/sunsight-ml
           REGISTRY="${ML_IMAGE%%/*}"
           aws ecr get-login-password --region "__REGION__" \
@@ -139,6 +141,7 @@ jobs:
           EOS
           )
           SCRIPT="${SCRIPT//__ML_IMAGE__/$ML_IMAGE}"
+          SCRIPT="${SCRIPT//__MODEL_VERSION__/$MODEL_VERSION}"
           SCRIPT="${SCRIPT//__REGION__/$AWS_REGION}"
 
           jq -n --arg cmd "$SCRIPT" '{commands: [$cmd]}' > /tmp/ssm.json
