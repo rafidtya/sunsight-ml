@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # setiap hasil deteksi dapat ditelusuri ke satu rilis bobot tertentu.
     MODEL_VERSION: str = "latest"
 
+    # Rahasia bersama yang wajib dikirim pemanggil pada header X-Api-Key. Kosong
+    # berarti pemeriksaan dimatikan, sehingga layanan hanya boleh dibuka tanpa
+    # kunci ketika berjalan di mesin yang sama dengan backend.
+    ML_API_KEY: str = ""
+
     MAX_IMAGE_SIZE: int = 10 * 1024 * 1024
     MAX_IMAGE_PIXELS: int = 20_000_000
 

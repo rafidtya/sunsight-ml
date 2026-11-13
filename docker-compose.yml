@@ -8,6 +8,9 @@ services:
     environment:
       MODEL_DEVICE: ${MODEL_DEVICE:-cpu}
       MODEL_VERSION: ${MODEL_VERSION:-latest}
+      # Kosong berarti pemeriksaan kunci dimatikan. Nilai sebenarnya hidup di
+      # .env sebelah berkas ini, sehingga CI tidak perlu memegang rahasianya.
+      ML_API_KEY: ${ML_API_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/ready"]
